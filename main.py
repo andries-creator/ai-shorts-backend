@@ -4,11 +4,18 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
 import zipfile, io
 
 app = FastAPI(title="AI Gaming Shorts Generator")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "./outputs"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
