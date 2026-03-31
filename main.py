@@ -1,6 +1,24 @@
 import os, uuid, asyncio, json, glob, subprocess, shutil
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+import json
+import uuid
+
+jobs = {}
+
+def save_jobs():
+    with open("jobs.json", "w") as f:
+        json.dump(jobs, f)
+
+def load_jobs():
+    global jobs
+    try:
+        with open("jobs.json", "r") as f:
+            jobs = json.load(f)
+    except:
+        jobs = {}
+
+load_jobs()
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import Optional
@@ -179,27 +197,25 @@ async def process_job(job_id: str):
 # ── routes ───────────────────────────────────────────────
 
 @app.post("/upload")
-async def upload(
-    video: UploadFile = File(...),
-    game_title: str = Form("Unknown Game"),
-    clip_length_min: int = Form(15),
-    clip_length_max: int = Form(30),
-    max_clips: int = Form(6),
-):
+async def upload(file: UploadFile = File(...)):
     job_id = str(uuid.uuid4())
-    ext = Path(video.filename or "video.mp4").suffix
-    dest = UPLOAD_DIR / f"{job_id}{ext}"
-    with open(dest, "wb") as f:
-        while chunk := await video.read(1024 * 1024):
-            f.write(chunk)
 
     jobs[job_id] = {
-        "status": "queued", "progress": 0, "step": 0,
-        "source_path": str(dest), "game_title": game_title,
-        "clip_length_min": clip_length_min, "clip_length_max": clip_length_max,
-        "max_clips": max_clips, "clips": [], "error": None,
+        "status": "processing"
     }
-    asyncio.create_task(process_job(job_id))
+
+    save_jobs()
+
+    # save file
+    file_path = f"input_{job_id}.mp4"
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+
+    # simulate processing (your FFmpeg goes here)
+    jobs[job_id]["status"] = "completed"
+
+    save_jobs()
+
     return {"job_id": job_id}
 
 @app.get("/status/{job_id}")
