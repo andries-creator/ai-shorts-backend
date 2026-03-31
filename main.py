@@ -1,22 +1,44 @@
 import os, uuid, asyncio, json, glob, subprocess, shutil
 from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-import json
-import uuid
+from fastapi import FastAPI, UploadFile, File
+import os
+import subprocess
 
-jobs = {}
+app = FastAPI()
 
-def save_jobs():
-    with open("jobs.json", "w") as f:
-        json.dump(jobs, f)
+UPLOAD = "uploads"
+OUTPUT = "outputs"
 
-def load_jobs():
-    global jobs
-    try:
-        with open("jobs.json", "r") as f:
-            jobs = json.load(f)
-    except:
-        jobs = {}
+os.makedirs(UPLOAD, exist_ok=True)
+os.makedirs(OUTPUT, exist_ok=True)
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    input_path = f"{UPLOAD}/input.mp4"
+
+    # save file
+    with open(input_path, "wb") as f:
+        f.write(await file.read())
+
+    clips = []
+
+    # create 3 clips
+    for i in range(3):
+        output_path = f"{OUTPUT}/clip_{i}.mp4"
+        start = i * 5
+
+        subprocess.run([
+            "ffmpeg",
+            "-i", input_path,
+            "-ss", str(start),
+            "-t", "5",
+            "-y",
+            output_path
+        ])
+
+        clips.append(output_path)
+
+    return {"clips": clips}
 
 load_jobs()
 from fastapi.middleware.cors import CORSMiddleware
