@@ -3,17 +3,31 @@ from fastapi.responses import JSONResponse
 import uuid
 import shutil
 import os
+import json
 
 app = FastAPI()
 
-# Store jobs in memory (simple version)
-jobs = {}
-
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
+JOBS_FILE = "jobs.json"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+# 📦 LOAD JOBS FROM FILE
+def load_jobs():
+    if not os.path.exists(JOBS_FILE):
+        return {}
+    with open(JOBS_FILE, "r") as f:
+        return json.load(f)
+
+# 💾 SAVE JOBS TO FILE
+def save_jobs(jobs):
+    with open(JOBS_FILE, "w") as f:
+        json.dump(jobs, f)
+
+# Initialize jobs
+jobs = load_jobs()
 
 
 @app.get("/")
@@ -21,7 +35,7 @@ def home():
     return {"message": "Backend is running"}
 
 
-# 🚀 UPLOAD ENDPOINT
+# 🚀 UPLOAD VIDEO
 @app.post("/upload")
 async def upload_video(
     file: UploadFile = File(...),
@@ -31,6 +45,8 @@ async def upload_video(
     max_clips: int = Form(...)
 ):
     try:
+        jobs = load_jobs()
+
         job_id = str(uuid.uuid4())
         file_path = os.path.join(UPLOAD_FOLDER, f"{job_id}_{file.filename}")
 
@@ -45,13 +61,18 @@ async def upload_video(
             "clips": []
         }
 
-        # 🔥 FAKE PROCESSING (replace later with AI)
-        # For now we simulate success
+        # 💾 SAVE immediately
+        save_jobs(jobs)
+
+        # 🔥 SIMULATED PROCESSING (for now)
         jobs[job_id]["status"] = "done"
         jobs[job_id]["clips"] = [
             f"/download/{job_id}_clip1.mp4",
             f"/download/{job_id}_clip2.mp4"
         ]
+
+        # 💾 SAVE again after processing
+        save_jobs(jobs)
 
         return {
             "job_id": job_id,
@@ -68,6 +89,8 @@ async def upload_video(
 # 📊 CHECK STATUS
 @app.get("/status/{job_id}")
 def check_status(job_id: str):
+    jobs = load_jobs()
+
     if job_id not in jobs:
         return {"error": "Job not found"}
 
@@ -80,6 +103,8 @@ def check_status(job_id: str):
 # 📦 GET RESULTS
 @app.get("/results/{job_id}")
 def get_results(job_id: str):
+    jobs = load_jobs()
+
     if job_id not in jobs:
         return {"error": "Job not found"}
 
@@ -92,4 +117,6 @@ def get_results(job_id: str):
 # 🎬 DOWNLOAD (mock for now)
 @app.get("/download/{clip_name}")
 def download_clip(clip_name: str):
-    return {"message": f"Download {clip_name} (not implemented yet)"}
+    return {
+        "message": f"Download {clip_name} (not implemented yet)"
+    }
