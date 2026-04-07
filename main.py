@@ -1,10 +1,13 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+import uuid
 import shutil
 import os
-import uuid
 
 app = FastAPI()
+
+# Store jobs in memory (simple version)
+jobs = {}
 
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
@@ -12,58 +15,81 @@ OUTPUT_FOLDER = "outputs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# Store jobs in memory (simple version)
-jobs = {}
 
 @app.get("/")
 def home():
-    return {"message": "Backend is running 🚀"}
+    return {"message": "Backend is running"}
 
-# 1️⃣ Upload video
+
+# 🚀 UPLOAD ENDPOINT
 @app.post("/upload")
-async def upload_video(file: UploadFile = File(...)):
-    job_id = str(uuid.uuid4())
+async def upload_video(
+    file: UploadFile = File(...),
+    game_title: str = Form(...),
+    clip_length_min: int = Form(...),
+    clip_length_max: int = Form(...),
+    max_clips: int = Form(...)
+):
+    try:
+        job_id = str(uuid.uuid4())
+        file_path = os.path.join(UPLOAD_FOLDER, f"{job_id}_{file.filename}")
 
-    input_path = f"{UPLOAD_FOLDER}/{job_id}_{file.filename}"
-    output_path = f"{OUTPUT_FOLDER}/{job_id}_short.mp4"
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    # Save uploaded file
-    with open(input_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        # Store job
+        jobs[job_id] = {
+            "status": "processing",
+            "file_path": file_path,
+            "clips": []
+        }
 
-    # Save job info
-    jobs[job_id] = {
-        "status": "processing",
-        "input": input_path,
-        "output": output_path
-    }
+        # 🔥 FAKE PROCESSING (replace later with AI)
+        # For now we simulate success
+        jobs[job_id]["status"] = "done"
+        jobs[job_id]["clips"] = [
+            f"/download/{job_id}_clip1.mp4",
+            f"/download/{job_id}_clip2.mp4"
+        ]
 
-    # 👉 FAKE processing (for now just copy file)
-    shutil.copy(input_path, output_path)
+        return {
+            "job_id": job_id,
+            "status": "processing"
+        }
 
-    jobs[job_id]["status"] = "done"
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
-    return {"job_id": job_id}
 
-# 2️⃣ Check status
+# 📊 CHECK STATUS
 @app.get("/status/{job_id}")
 def check_status(job_id: str):
-    job = jobs.get(job_id)
+    if job_id not in jobs:
+        return {"error": "Job not found"}
 
-    if not job:
-        return {"error": "job not found"}
+    return {
+        "job_id": job_id,
+        "status": jobs[job_id]["status"]
+    }
 
-    return {"status": job["status"]}
 
-# 3️⃣ Download result
-@app.get("/download/{job_id}")
-def download_video(job_id: str):
-    job = jobs.get(job_id)
+# 📦 GET RESULTS
+@app.get("/results/{job_id}")
+def get_results(job_id: str):
+    if job_id not in jobs:
+        return {"error": "Job not found"}
 
-    if not job:
-        return {"error": "job not found"}
+    return {
+        "job_id": job_id,
+        "clips": jobs[job_id]["clips"]
+    }
 
-    if job["status"] != "done":
-        return {"error": "not ready"}
 
-    return {"download_url": job["output"]}
+# 🎬 DOWNLOAD (mock for now)
+@app.get("/download/{clip_name}")
+def download_clip(clip_name: str):
+    return {"message": f"Download {clip_name} (not implemented yet)"}
