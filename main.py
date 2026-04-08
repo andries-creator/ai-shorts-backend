@@ -2,7 +2,6 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse
 import os
 import subprocess
-import time
 
 app = FastAPI()
 
@@ -10,7 +9,7 @@ app = FastAPI()
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# In-memory job storage
+# Job storage
 jobs = {}
 
 
@@ -27,7 +26,7 @@ def generate_video(topic: str, background_tasks: BackgroundTasks):
 
     jobs[job_id] = {"status": "processing"}
 
-    background_tasks.add_task(create_video, job_id, topic)
+    background_tasks.add_task(create_video, job_id)
 
     return {
         "job_id": job_id,
@@ -35,27 +34,26 @@ def generate_video(topic: str, background_tasks: BackgroundTasks):
     }
 
 
-# 🔥 BACKGROUND VIDEO CREATION (REAL FFmpeg)
-def create_video(job_id: str, topic: str):
-    file_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
+# 🔥 REAL CLIP CREATION FROM VIDEO
+def create_video(job_id: str):
+    input_file = "input.mp4"  # must exist
+    output_file = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
 
-    text = f"{topic} - Viral Short"
-
+    # Cut 20 seconds starting at 1 minute
     command = [
         "ffmpeg",
-        "-f", "lavfi",
-        "-i", "color=c=black:s=1080x1920:d=6",
-        "-vf",
-        f"drawtext=text='{text}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2",
+        "-i", input_file,
+        "-ss", "00:01:00",
+        "-t", "20",
+        "-vf", "scale=1080:1920",
         "-y",
-        file_path
+        output_file
     ]
 
     subprocess.run(command)
 
-    # Mark job done
     jobs[job_id]["status"] = "done"
-    jobs[job_id]["file"] = file_path
+    jobs[job_id]["file"] = output_file
 
 
 # 🔥 CHECK STATUS
