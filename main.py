@@ -1,15 +1,16 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse
 import os
+import subprocess
 import time
 
 app = FastAPI()
 
-# Folder where videos will be stored
+# Create output folder
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Fake in-memory job storage
+# In-memory job storage
 jobs = {}
 
 
@@ -19,7 +20,7 @@ def home():
     return {"message": "AI Shorts Backend Running 🚀"}
 
 
-# 🔥 CREATE JOB
+# 🔥 GENERATE VIDEO
 @app.post("/generate/{topic}")
 def generate_video(topic: str, background_tasks: BackgroundTasks):
     job_id = topic.replace(" ", "_")
@@ -34,16 +35,25 @@ def generate_video(topic: str, background_tasks: BackgroundTasks):
     }
 
 
-# 🔥 BACKGROUND VIDEO CREATION (SIMULATED)
+# 🔥 BACKGROUND VIDEO CREATION (REAL FFmpeg)
 def create_video(job_id: str, topic: str):
-    time.sleep(5)  # simulate processing
-
     file_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
 
-    # Create a fake video file (for now)
-    with open(file_path, "wb") as f:
-        f.write(b"FAKE VIDEO CONTENT")
+    text = f"{topic} - Viral Short"
 
+    command = [
+        "ffmpeg",
+        "-f", "lavfi",
+        "-i", "color=c=black:s=1080x1920:d=6",
+        "-vf",
+        f"drawtext=text='{text}':fontcolor=white:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2",
+        "-y",
+        file_path
+    ]
+
+    subprocess.run(command)
+
+    # Mark job done
     jobs[job_id]["status"] = "done"
     jobs[job_id]["file"] = file_path
 
@@ -57,7 +67,7 @@ def check_status(job_id: str):
     return jobs[job_id]
 
 
-# 🔥 DOWNLOAD VIDEO (✅ REAL FIX HERE)
+# 🔥 DOWNLOAD VIDEO
 @app.get("/download/{job_id}")
 def download(job_id: str):
     file_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
