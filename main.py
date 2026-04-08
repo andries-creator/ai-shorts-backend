@@ -1,50 +1,44 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 import os
-import subprocess
 
 app = FastAPI()
 
-# ✅ Create outputs folder
-OUTPUT_DIR = "outputs"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Folder where videos are stored
+DOWNLOAD_FOLDER = "downloads"
+
+# Ensure folder exists
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 
-# ✅ GENERATE VIDEO
-@app.post("/generate")
-def generate_video(data: dict):
-    topic = data.get("topic", "test")
-
-    # Clean filename
-    filename = topic.replace(" ", "_") + ".mp4"
-    filepath = os.path.join(OUTPUT_DIR, filename)
-
-    # ✅ Create test video using FFmpeg
-    subprocess.run([
-        "ffmpeg",
-        "-y",  # overwrite if exists
-        "-f", "lavfi",
-        "-i", "color=c=blue:s=720x1280:d=5",
-        "-vf", f"drawtext=text='{topic}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-text_h)/2",
-        filepath
-    ])
-
-    # Debug log
-    print("Saved video to:", filepath)
-    print("Files in folder:", os.listdir(OUTPUT_DIR))
-
-    return {
-        "message": "Video created",
-        "filename": filename
-    }
+# TEST ROUTE (to confirm API works)
+@app.get("/")
+def home():
+    return {"message": "API is running"}
 
 
-# ✅ DOWNLOAD VIDEO
-@app.get("/download/{video_name}")
-def download_video(video_name: str):
-    filepath = os.path.join(OUTPUT_DIR, f"{video_name}.mp4")
+# SAVE / SIMULATE VIDEO (TEST)
+@app.get("/create/{filename}")
+def create_file(filename: str):
+    file_path = os.path.join(DOWNLOAD_FOLDER, f"{filename}.mp4")
 
-    if os.path.exists(filepath):
-        return FileResponse(filepath, media_type="video/mp4", filename=video_name + ".mp4")
-    else:
-        return {"error": "File not found"}
+    # Create a fake test file
+    with open(file_path, "w") as f:
+        f.write("This is a test video file")
+
+    return {"message": f"{filename}.mp4 created successfully"}
+
+
+# DOWNLOAD ROUTE (THIS WAS MISSING OR WRONG)
+@app.get("/download/{filename}")
+def download_file(filename: str):
+    file_path = os.path.join(DOWNLOAD_FOLDER, f"{filename}.mp4")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        file_path,
+        media_type='application/octet-stream',
+        filename=f"{filename}.mp4"
+    )
