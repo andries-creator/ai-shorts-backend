@@ -1,11 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import shutil
+import subprocess
+import uuid
 
 app = FastAPI()
 
-# ✅ CORS FIX (THIS SOLVES "Failed to fetch")
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,39 +17,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Folder to store videos
-DOWNLOAD_FOLDER = "downloads"
-os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+UPLOAD_FOLDER = "uploads"
+OUTPUT_FOLDER = "outputs"
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
-# ✅ TEST ROUTE
 @app.get("/")
 def home():
-    return {"message": "API is running"}
+    return {"message": "API running"}
 
 
-# ✅ CREATE VIDEO (SIMULATED)
-@app.get("/create/{filename}")
-def create_file(filename: str):
-    file_path = os.path.join(DOWNLOAD_FOLDER, f"{filename}.mp4")
+# ✅ UPLOAD + PROCESS VIDEO
+@app.post("/upload")
+def upload_video(file: UploadFile = File(...)):
+    job_id = str(uuid.uuid4())
 
-    # Create a fake test video file
-    with open(file_path, "w") as f:
-        f.write("This is a test video file")
+    input_path = os.path.join(UPLOAD_FOLDER, f"{job_id}.mp4")
+    output_path = os.path.join(OUTPUT_FOLDER, f"{job_id}.mp4")
 
-    return {"message": f"{filename}.mp4 created successfully"}
+    # Save uploaded file
+    with open(input_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 🎬 Create SHORT (basic clip for now)
+    subprocess.run([
+        "ffmpeg",
+        "-i", input_path,
+        "-ss", "00:00:10",
+        "-t", "15",
+        "-vf", "scale=1080:1920",
+        "-y",
+        output_path
+    ])
+
+    return {
+        "message": "Video processed",
+        "job_id": job_id
+    }
 
 
-# ✅ DOWNLOAD VIDEO
-@app.get("/download/{filename}")
-def download_file(filename: str):
-    file_path = os.path.join(DOWNLOAD_FOLDER, f"{filename}.mp4")
+# ✅ DOWNLOAD RESULT
+@app.get("/download/{job_id}")
+def download_video(job_id: str):
+    file_path = os.path.join(OUTPUT_FOLDER, f"{job_id}.mp4")
 
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        return {"error": "File not found"}
 
-    return FileResponse(
-        path=file_path,
-        media_type='application/octet-stream',
-        filename=f"{filename}.mp4"
-    )
+    return FileResponse(file_path, media_type="video/mp4", filename=f"{job_id}.mp4")
