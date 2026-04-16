@@ -1,35 +1,43 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
 
 app = FastAPI()
 
-# Folder where videos are stored
-DOWNLOAD_FOLDER = "downloads"
+# ✅ CORS FIX (THIS SOLVES "Failed to fetch")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Ensure folder exists
+# Folder to store videos
+DOWNLOAD_FOLDER = "downloads"
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
 
-# TEST ROUTE (to confirm API works)
+# ✅ TEST ROUTE
 @app.get("/")
 def home():
     return {"message": "API is running"}
 
 
-# SAVE / SIMULATE VIDEO (TEST)
+# ✅ CREATE VIDEO (SIMULATED)
 @app.get("/create/{filename}")
 def create_file(filename: str):
     file_path = os.path.join(DOWNLOAD_FOLDER, f"{filename}.mp4")
 
-    # Create a fake test file
+    # Create a fake test video file
     with open(file_path, "w") as f:
         f.write("This is a test video file")
 
     return {"message": f"{filename}.mp4 created successfully"}
 
 
-# DOWNLOAD ROUTE (THIS WAS MISSING OR WRONG)
+# ✅ DOWNLOAD VIDEO
 @app.get("/download/{filename}")
 def download_file(filename: str):
     file_path = os.path.join(DOWNLOAD_FOLDER, f"{filename}.mp4")
@@ -38,7 +46,7 @@ def download_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(
-        file_path,
+        path=file_path,
         media_type='application/octet-stream',
         filename=f"{filename}.mp4"
     )
