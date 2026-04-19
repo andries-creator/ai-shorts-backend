@@ -16,29 +16,32 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 jobs = {}
 
 # -----------------------------
-# CREATE CLIPS FUNCTION
+# CREATE CLIPS FUNCTION (FIXED)
 # -----------------------------
 def create_clips(input_path, job_id):
     output_paths = []
 
-    # Create job folder
     job_folder = os.path.join(OUTPUT_FOLDER, job_id)
     os.makedirs(job_folder, exist_ok=True)
 
-    # Simple clip timestamps (seconds)
     timestamps = [10, 30, 50]
 
     for i, start in enumerate(timestamps):
         output_file = os.path.join(job_folder, f"clip_{i}.mp4")
 
+        # ✅ FIXED FFMPEG COMMAND (NO MORE CORRUPT FILES)
         command = [
             "ffmpeg",
             "-y",
-            "-i", input_path,
             "-ss", str(start),
+            "-i", input_path,
             "-t", "20",
             "-vf", "scale=720:1280",
-            "-c:a", "copy",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "128k",
             output_file
         ]
 
@@ -97,7 +100,7 @@ def get_results(job_id: str):
 
 
 # -----------------------------
-# DOWNLOAD FILE
+# DOWNLOAD CLIP
 # -----------------------------
 @app.get("/download/{job_id}/{clip_index}")
 def download_clip(job_id: str, clip_index: int):
