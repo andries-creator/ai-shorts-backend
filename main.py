@@ -1,11 +1,21 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import os
 import shutil
 import subprocess
 
 app = FastAPI()
+
+# ✅ CORS (fixes frontend issues)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
@@ -16,7 +26,7 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 jobs = {}
 
 # -----------------------------
-# CREATE CLIPS FUNCTION (FIXED)
+# CREATE CLIPS (FIXED + STABLE)
 # -----------------------------
 def create_clips(input_path, job_id):
     output_paths = []
@@ -24,28 +34,60 @@ def create_clips(input_path, job_id):
     job_folder = os.path.join(OUTPUT_FOLDER, job_id)
     os.makedirs(job_folder, exist_ok=True)
 
-    timestamps = [10, 30, 50]
+    timestamps = [5, 15, 30]
 
     for i, start in enumerate(timestamps):
         output_file = os.path.join(job_folder, f"clip_{i}.mp4")
 
-        # ✅ FIXED FFMPEG COMMAND (NO MORE CORRUPT FILES)
         command = [
             "ffmpeg",
             "-y",
-            "-ss", str(start),
+
+            # safer input handling
             "-i", input_path,
-            "-t", "20",
-            "-vf", "scale=720:1280",
+            "-ss", str(start),
+
+            "-t", "15",
+
+            # force vertical + compatibility
+            "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,"
+                   "pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+
+            # video encoding
             "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
+            "-profile:v", "baseline",
+            "-level", "3.0",
+            "-pix_fmt", "yuv420p",
+            "-preset", "veryfast",
+            "-crf", "28",
+
+            # audio encoding
             "-c:a", "aac",
             "-b:a", "128k",
+            "-ar", "44100",
+            "-ac", "2",
+
+            # better playback
+            "-movflags", "+faststart",
+
             output_file
         ]
 
-        subprocess.run(command)
+        result = subprocess.run(command, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print("FFMPEG ERROR:", result.stderr)
+            raise Exception(result.stderr)
+
+        # verify file exists
+        if not os.path.exists(output_file):
+            raise Exception("Clip not created")
+
+        size = os.path.getsize(output_file)
+        print(f"Clip {i} size:", size)
+
+        if size < 100000:  # 100KB safety check
+            raise Exception("Clip too small → likely corrupted")
 
         output_paths.append(output_file)
 
@@ -65,6 +107,7 @@ async def upload_video(
     job_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_FOLDER, f"{job_id}_{file.filename}")
 
+    # save uploaded file
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -87,7 +130,7 @@ async def upload_video(
 
 
 # -----------------------------
-# GET RESULTS
+# CHECK RESULTS
 # -----------------------------
 @app.get("/results/{job_id}")
 def get_results(job_id: str):
@@ -111,6 +154,10 @@ def download_clip(job_id: str, clip_index: int):
 
     try:
         file_path = job["files"][clip_index]
-        return FileResponse(file_path, media_type="video/mp4", filename=os.path.basename(file_path))
+        return FileResponse(
+            file_path,
+            media_type="video/mp4",
+            filename=os.path.basename(file_path)
+        )
     except:
         return {"error": "file not found"}
